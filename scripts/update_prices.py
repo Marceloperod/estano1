@@ -3,7 +3,8 @@
 
 - LME (estaño, plomo, cobre, zinc, aluminio): Cash-Settlement, 3 meses y stocks
   (tabla pública de westmetall.com)
-- Plata y oro: cierre diario XAG/USD y XAU/USD (stooq.com; respaldo Yahoo Finance)
+- Oro: London Fixing USD/oz (westmetall.com); plata: precio de plata fina EUR/kg de
+  westmetall convertido a USD/oz con el fixing BCE (respaldos: stooq.com, Yahoo Finance)
 - USD/MXN: FIX de Banxico (requiere el secreto BANXICO_TOKEN; respaldo Yahoo / BCE)
 - Alertas: reglas en alerts.json, aviso push vía ntfy.sh (secreto NTFY_TOPIC)
 
@@ -106,11 +107,42 @@ def parse_westmetall(html):
     return rows
 
 
-def fetch_lme(field):
-    url = f"https://www.westmetall.com/en/markdaten.php?action=table&field={field}"
-    rows = parse_westmetall(get(url))
+def fetch_westmetall(field, backfill=False):
+    """Año en curso; con backfill también los 2 años anteriores (para la primera carga)."""
+    base = f"https://www.westmetall.com/en/markdaten.php?action=table&field={field}"
+    rows = parse_westmetall(get(base))
     if not rows:
-        raise RuntimeError(f"no se encontraron filas en {url}")
+        raise RuntimeError(f"no se encontraron filas en {base}")
+    if backfill:
+        y = date.today().year
+        for yr in (y - 1, y - 2):
+            try:
+                rows += parse_westmetall(get(f"{base}&year={yr}"))
+            except Exception as e:  # noqa: BLE001
+                print(f"AVISO: {field} {yr}: {e}")
+    return rows
+
+
+def fetch_lme(field, backfill=False):
+    return fetch_westmetall(field, backfill)
+
+
+OZ_PER_KG = 32.1507466
+
+
+def fetch_westmetall_precious(key, backfill=False):
+    """Oro: London Fixing USD/oz. Plata: Feinsilber EUR/kg convertido a USD/oz con el fixing BCE."""
+    if key == "gold":
+        return [{"date": r["date"], "close": r["cash"]}
+                for r in fetch_westmetall("USD_ozt_London", backfill)]
+    eurusd = {r["date"]: r["cash"] for r in fetch_westmetall("Euro_EZB", backfill)}
+    rows, last_fx = [], None
+    for r in sorted(fetch_westmetall("Ag", backfill), key=lambda r: r["date"]):
+        last_fx = eurusd.get(r["date"], last_fx)
+        if last_fx:
+            rows.append({"date": r["date"], "close": round(r["cash"] * last_fx / OZ_PER_KG, 3)})
+    if not rows:
+        raise RuntimeError("westmetall sin datos de plata")
     return rows
 
 
@@ -127,7 +159,15 @@ def fetch_stooq(symbol):
 
 
 def fetch_yahoo(symbol, field="close"):
-    data = json.loads(get(f"https://query1.finance.yahoo.com/v8/finance/chart/{symbol}?range=5y&interval=1d"))
+    data, err = None, None
+    for host in ("query1", "query2"):
+        try:
+            data = json.loads(get(f"https://{host}.finance.yahoo.com/v8/finance/chart/{symbol}?range=5y&interval=1d"))
+            break
+        except Exception as e:  # noqa: BLE001
+            err = e
+    if data is None:
+        raise RuntimeError(err)
     res = data["chart"]["result"][0]
     rows = []
     for ts, c in zip(res["timestamp"], res["indicators"]["quote"][0]["close"]):
@@ -224,7 +264,7 @@ def main():
     for key, (name, field) in LME.items():
         old = prev_m.get(key, {}).get("history", [])
         try:
-            hist = merge(old, fetch_lme(field))
+            hist = merge(old, fetch_lme(field, backfill=len(old) < 400))
         except Exception as e:  # noqa: BLE001
             out["errors"].append(f"{name}: {e}")
             hist = old
@@ -234,8 +274,11 @@ def main():
     for key, (name, stooq, yahoo, label) in PRECIOUS.items():
         old = prev_m.get(key, {}).get("history", [])
         hist, src = old, prev_m.get(key, {}).get("source", "—")
-        for fn, lab in ((lambda: fetch_stooq(stooq), f"{label} (stooq.com)"),
-                        (lambda: fetch_yahoo(yahoo), f"COMEX {yahoo} (Yahoo Finance)")):
+        wm_label = ("Oro London Fixing (westmetall.com)" if key == "gold"
+                    else "Plata fina EUR/kg × fixing BCE (westmetall.com)")
+        for fn, lab in ((lambda k=key: fetch_westmetall_precious(k, backfill=len(old) < 400), wm_label),
+                        (lambda s=stooq: fetch_stooq(s), f"{label} (stooq.com)"),
+                        (lambda y=yahoo: fetch_yahoo(y), f"COMEX {yahoo} (Yahoo Finance)")):
             try:
                 hist, src = merge(old, fn()), lab
                 break
