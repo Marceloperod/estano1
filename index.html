@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Metales</title>
+  <meta name="theme-color" content="#0f1216">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Metales">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1 id="title">Precios</h1>
+      <p class="sub" id="updated">Cargando…</p>
+    </div>
+    <div class="top-actions">
+      <div class="seg" id="cur" role="group" aria-label="Moneda">
+        <button data-cur="USD">USD</button><button data-cur="MXN">MXN/kg</button>
+      </div>
+      <button class="icon-btn" id="refresh" aria-label="Actualizar">
+        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 1 1-2.64-6.36"/><path d="M21 3v6h-6"/></svg>
+      </button>
+    </div>
+  </header>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <main>
+    <!-- ============ PRECIOS ============ -->
+    <section class="view" id="view-precios">
+      <div class="list" id="list" aria-label="Metales"></div>
+
+      <div class="panel">
+        <div class="detail-head">
+          <div>
+            <h2 id="d-name">—</h2>
+            <p class="sub" id="d-meta">—</p>
+          </div>
+          <div class="seg small" id="range">
+            <button data-days="22">1M</button><button data-days="66">3M</button><button data-days="130">6M</button><button data-days="260">1A</button><button data-days="9999">Todo</button>
+          </div>
+        </div>
+        <div class="seg small mode" id="mode">
+          <button data-mode="precio">Precio</button><button data-mode="spread">Spread cash–3M</button><button data-mode="stock">Inventario LME</button>
+        </div>
+        <div class="chart-wrap" id="chart-wrap">
+          <svg id="chart" width="100%"></svg>
+          <div class="tip" id="tip" hidden></div>
+        </div>
+        <dl class="stats" id="stats"></dl>
+      </div>
+    </section>
+
+    <!-- ============ PROMEDIOS ============ -->
+    <section class="view" id="view-promedios" hidden>
+      <div class="chips" id="avg-metal"></div>
+      <div class="kpis" id="avg-kpis"></div>
+      <div class="panel">
+        <h2>Promedios mensuales</h2>
+        <p class="sub">Promedio de los cierres oficiales (cash) de cada mes. MXN/kg usa el FIX de cada día.</p>
+        <div class="table-wrap"><table class="tbl" id="avg-table"></table></div>
+      </div>
+    </section>
+
+    <!-- ============ CALCULADORAS ============ -->
+    <section class="view" id="view-calc" hidden>
+      <div class="panel">
+        <h2>Costo de aleación</h2>
+        <p class="sub">Costo del metal contenido en una soldadura u otra aleación.</p>
+        <div class="form">
+          <label>Aleación<select id="a-preset"></select></label>
+          <label>Precio base<select id="a-base" class="base-select"></select></label>
+          <div class="comp" id="a-comp"></div>
+          <label>Merma %<input id="a-merma" type="number" inputmode="decimal" step="0.1" value="2"></label>
+          <label>Costo de conversión (USD/kg)<input id="a-conv" type="number" inputmode="decimal" step="0.01" value="0"></label>
+        </div>
+        <div class="result" id="a-result"></div>
+      </div>
+
+      <div class="panel">
+        <h2>Precio de compra de scrap</h2>
+        <p class="sub">Valor de un lote pagado como % del precio LME del metal contenido.</p>
+        <div class="form">
+          <label>Material<select id="s-mat"></select></label>
+          <label>Precio base<select id="s-base" class="base-select"></select></label>
+          <label>Contenido metálico %<input id="s-cont" type="number" inputmode="decimal" step="0.1" value="95"></label>
+          <label>% de pago sobre LME<input id="s-pay" type="number" inputmode="decimal" step="0.5" value="85"></label>
+          <label>Peso del lote (kg)<input id="s-kg" type="number" inputmode="decimal" step="1" value="1000"></label>
+        </div>
+        <div class="result" id="s-result"></div>
+      </div>
+    </section>
+
+    <!-- ============ ALERTAS ============ -->
+    <section class="view" id="view-alertas" hidden>
+      <div class="panel">
+        <h2>Alertas activas</h2>
+        <p class="sub">Se revisan con cada cierre nuevo y llegan como notificación a la app ntfy.</p>
+        <div id="al-list"></div>
+      </div>
+      <div class="panel">
+        <h2>Nueva alerta</h2>
+        <div class="form">
+          <label>Metal<select id="al-metal"></select></label>
+          <label>Condición<select id="al-tipo">
+            <option value="sube">Sube por encima de</option>
+            <option value="baja">Baja por debajo de</option>
+            <option value="movimiento">Se mueve en el día (±%)</option>
+          </select></label>
+          <label><span id="al-label">Precio</span><input id="al-valor" type="number" inputmode="decimal" step="any"></label>
+        </div>
+        <pre class="code" id="al-json"></pre>
+        <div class="btns">
+          <button class="btn" id="al-copy">Copiar regla</button>
+          <a class="btn primary" id="al-edit" target="_blank" rel="noopener">Editar alertas en GitHub</a>
+        </div>
+        <p class="sub">Copia la regla, abre el archivo de alertas y pégala dentro de <code>"reglas": [ … ]</code>, separada con coma. Guarda con “Commit changes”.</p>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot" id="foot"></footer>
+  <div class="toast" id="toast" role="status" hidden></div>
+
+  <nav class="tabs" id="tabs">
+    <button data-view="precios"><svg viewBox="0 0 24 24"><path d="M3 17l5-5 4 4 8-9"/><path d="M14 7h6v6"/></svg>Precios</button>
+    <button data-view="promedios"><svg viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M3 9h18M8 2v4M16 2v4"/></svg>Promedios</button>
+    <button data-view="calc"><svg viewBox="0 0 24 24"><rect x="5" y="2" width="14" height="20" rx="2"/><path d="M8 6h8M8 11h.01M12 11h.01M16 11h.01M8 15h.01M12 15h.01M16 15h.01M8 19h8"/></svg>Calcular</button>
+    <button data-view="alertas"><svg viewBox="0 0 24 24"><path d="M6 8a6 6 0 1 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg>Alertas</button>
+  </nav>
+
+  <script src="app.js"></script>
+</body>
+</html>

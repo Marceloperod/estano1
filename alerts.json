@@ -1,0 +1,8 @@
+{
+  "_ayuda": "metal: tin, lead, copper, zinc, aluminium, silver, gold. tipo: sube | baja (valor = precio en USD/t o USD/oz) | movimiento (valor = % diario). Ejemplos abajo; edítalos o bórralos.",
+  "reglas": [
+    { "metal": "tin", "tipo": "movimiento", "valor": 3 },
+    { "metal": "lead", "tipo": "movimiento", "valor": 3 },
+    { "metal": "silver", "tipo": "movimiento", "valor": 4 }
+  ]
+}
