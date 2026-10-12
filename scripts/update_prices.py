@@ -273,30 +273,32 @@ def main():
 
     for key, (name, stooq, yahoo, label) in PRECIOUS.items():
         old = prev_m.get(key, {}).get("history", [])
-        hist, src = old, prev_m.get(key, {}).get("source", "—")
+        hist, src, errs = old, prev_m.get(key, {}).get("source", "—"), []
         wm_label = ("Oro London Fixing (westmetall.com)" if key == "gold"
                     else "Plata fina EUR/kg × fixing BCE (westmetall.com)")
         for fn, lab in ((lambda k=key: fetch_westmetall_precious(k, backfill=len(old) < 400), wm_label),
                         (lambda s=stooq: fetch_stooq(s), f"{label} (stooq.com)"),
                         (lambda y=yahoo: fetch_yahoo(y), f"COMEX {yahoo} (Yahoo Finance)")):
             try:
-                hist, src = merge(old, fn()), lab
+                hist, src, errs = merge(old, fn()), lab, []
                 break
             except Exception as e:  # noqa: BLE001
-                out["errors"].append(f"{name} {lab}: {e}")
+                errs.append(f"{name} {lab}: {e}")
+        out["errors"] += errs  # solo si fallaron todas las fuentes
         out["metals"][key] = {"name": name, "unit": "USD/oz", "kind": "precious",
                               "source": src, "history": hist}
 
     old_fx = prev.get("fx", {}).get("usdmxn", {})
-    hist, src = old_fx.get("history", []), old_fx.get("source", "—")
+    hist, src, errs = old_fx.get("history", []), old_fx.get("source", "—"), []
     for fn, lab in ((fetch_banxico_fix, "FIX Banxico"),
                     (lambda: fetch_yahoo("MXN=X", "fix"), "USD/MXN (Yahoo Finance)"),
                     (fetch_frankfurter, "USD/MXN (Banco Central Europeo)")):
         try:
-            hist, src = merge(old_fx.get("history", []), fn()), lab
+            hist, src, errs = merge(old_fx.get("history", []), fn()), lab, []
             break
         except Exception as e:  # noqa: BLE001
-            out["errors"].append(f"Tipo de cambio {lab}: {e}")
+            errs.append(f"Tipo de cambio {lab}: {e}")
+    out["errors"] += errs  # solo si fallaron todas las fuentes
     out["fx"]["usdmxn"] = {"name": "USD/MXN", "source": src, "history": hist}
     # No es error si Banxico solo falta por no tener token y otro respaldo funcionó
     out["errors"] = [e for e in out["errors"] if "BANXICO_TOKEN" not in e or not hist]
